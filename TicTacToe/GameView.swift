@@ -1,0 +1,168 @@
+//
+//  GameView.swift
+//  TicTacToe
+//
+//  Created by Luka Vujnovac on 25.07.2021..
+//
+
+import SwiftUI
+
+struct GameView: View {
+    let columns: [GridItem] = [GridItem(.flexible()),
+                               GridItem(.flexible()),
+                               GridItem(.flexible())]
+    
+    @State private var moves: [Move?] = Array(repeating: nil, count: 9)
+    @State private var isGameBoardDisabled: Bool = false
+    @State private var alertItem: AlertItem?
+    
+    var body: some View {
+        GeometryReader { geometry in 
+            VStack{
+                Spacer()
+                
+                LazyVGrid(columns: columns, spacing: 7) {
+                    ForEach(0..<9) { i in
+                        ZStack {
+                            Circle()
+                                .foregroundColor(Color(.systemBlue)).opacity(0.5)
+                                .frame(width: geometry.size.width/3 - 15, height: geometry.size.width/3 - 15)
+                            
+                            Image(systemName: moves[i]?.indicator ?? "")
+                                .resizable()
+                                .frame(width: 40, height: 40)
+                                .foregroundColor(.white)
+                        }
+                        .onTapGesture {
+                            if isSquareOccupied(in: moves, for: i) {return}  
+                            moves[i] = Move(player: .human, boardIndex: i)
+                            
+                            if checkWinCondition(for: .human, in: moves) {
+                                alertItem = AlertContext.humanWin
+                                return
+                            }
+                            
+                            if checkForDraw(in: moves) {
+                                alertItem = AlertContext.draw
+                                return
+                            }
+                            
+                            isGameBoardDisabled = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                let computerPosition = determineComputerMovePosition(in: moves)
+                                moves[computerPosition] = Move(player: .computer, boardIndex: computerPosition)
+                                isGameBoardDisabled = false
+                                
+                                if checkWinCondition(for: .computer, in: moves) {
+                                    alertItem = AlertContext.computerWin
+                                    return
+                                }
+                                
+                                if checkForDraw(in: moves) {
+                                    alertItem = AlertContext.draw
+                                    return
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer()
+            }
+            .disabled(isGameBoardDisabled)
+            .padding()
+            .alert(item: $alertItem) { alertItem in
+                Alert(title: alertItem.title,
+                      message: alertItem.message,
+                      dismissButton: .default(alertItem.buttonTitle,
+                                              action: {resetGame()}))
+            }
+        }
+    }
+    
+    func isSquareOccupied(in moves: [Move?], for index: Int) -> Bool {
+        
+        return moves.contains(where: { $0?.boardIndex == index})
+    }
+    
+    func determineComputerMovePosition(in moves: [Move?]) -> Int {
+        var movePosition = Int.random(in: 0..<9)
+        //if AI cna win then win
+        let winPatterns: Set<Set<Int>> = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6], [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6]]
+        
+        let computerMoves = moves.compactMap { $0 }.filter {$0.player == .computer} ///compact map mice sve nilove
+        let computerPositions = Set(computerMoves.map { $0.boardIndex })
+        
+        for pattern in winPatterns {
+            let winPosition = pattern.subtracting(computerPositions)
+            
+            if winPosition.count == 1 {
+                let isAvailable = !isSquareOccupied(in: moves, for: winPosition.first!)
+                if isAvailable {return winPosition.first!}
+            }
+        }
+        
+        //if AI cant win then block
+        
+        let humanMoves = moves.compactMap { $0 }.filter {$0.player == .human} ///compact map mice sve nilove
+        let humanPositions = Set(humanMoves.map { $0.boardIndex })
+        
+        for pattern in winPatterns {
+            let winPosition = pattern.subtracting(humanPositions)
+            
+            if winPosition.count == 1 {
+                let isAvailable = !isSquareOccupied(in: moves, for: winPosition.first!)
+                if isAvailable {return winPosition.first!}
+            }
+        }
+        
+        //if AI cant block then take the middle square
+        let centerSquare = 4
+        if !isSquareOccupied(in: moves, for: centerSquare) {
+            return centerSquare
+        }
+        
+        //take random square
+        while isSquareOccupied(in: moves, for: movePosition) {
+             movePosition = Int.random(in: 0..<9)
+        }
+        return movePosition
+    }
+    
+    func checkWinCondition(for player: Player, in moves: [Move?]) -> Bool {
+        let winPatterns: Set<Set<Int>> = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6], [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6]]
+        
+        let playerMoves = moves.compactMap { $0 }.filter {$0.player == player} //compact map mice sve nilove
+        let playerPositions = Set(playerMoves.map { $0.boardIndex })
+        
+        for pattern in winPatterns where pattern.isSubset(of: playerPositions) { return true }
+        
+        return false
+    }
+    
+    func checkForDraw(in moves: [Move?]) -> Bool {
+        return moves.compactMap { $0 }.count == 9
+    }
+    
+    func resetGame() {
+        moves = Array(repeating: nil, count: 9)
+    }
+}
+
+enum Player {
+    case human, computer
+}
+
+struct Move {
+    let player: Player
+    let boardIndex: Int
+    
+    var indicator: String {
+        return player == .human ? "xmark" : "circle"
+    }
+}
+
+struct ContentView_Previews: PreviewProvider {
+    static var previews: some View {
+        GameView()
+    }
+}
